@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Account-level settings for the Onward Logistics labs, kept in SSM Parameter
+  Store so personal values never appear in Git. Deployed once with the values
+  passed on the command line; other stacks read them with dynamic references.
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, test, prod]
+    Default: dev
+  BudgetAlertEmail:
+    Type: String
+    AllowedPattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+    Description: Who receives budget alerts.
+
+Resources:
+  BudgetAlertEmailParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/onward/${Environment}/budget-alert-email"
+      Type: String
+      Value: !Ref BudgetAlertEmail
+      Description: Recipient of onward budget alerts.
+      Tags:
+        Project: onward
+        Owner: Gabriel Anyaele
+        Environment: !Ref Environment

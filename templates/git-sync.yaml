@@ -1,0 +1,169 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Git sync wiring for one lab: the link to the lab's repository, the role Git
+  sync deploys with, and one sync configuration per stack (up to five layers).
+  Layer N keeps stack onward-<env>-<lab>-<layer> in step with
+  infra/<layer>/deployment.yaml on the branch. Layers usually depend on earlier
+  layers' exports, so deploy.sh enables them one at a time (SyncedLayers = 1, 2, ...).
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, test, prod]
+    Default: dev
+  Lab:
+    Type: String
+    AllowedPattern: "^[a-z][a-z0-9-]{1,20}$"
+    Description: Short lab name used in stack names, e.g. delivery.
+  ConnectionArn:
+    Type: String
+  GitHubOwner:
+    Type: String
+  RepositoryName:
+    Type: String
+  Branch:
+    Type: String
+    Default: main
+  Layer1: { Type: String, Default: "" }
+  Layer2: { Type: String, Default: "" }
+  Layer3: { Type: String, Default: "" }
+  Layer4: { Type: String, Default: "" }
+  Layer5: { Type: String, Default: "" }
+  SyncedLayers:
+    Type: Number
+    AllowedValues: [0, 1, 2, 3, 4, 5]
+    Default: 0
+    Description: How many layers, in order, Git sync manages.
+
+Conditions:
+  Upto1: !Not [!Equals [!Ref SyncedLayers, 0]]
+  Upto2: !And [!Condition Upto1, !Not [!Equals [!Ref SyncedLayers, 1]]]
+  Upto3: !And [!Condition Upto2, !Not [!Equals [!Ref SyncedLayers, 2]]]
+  Upto4: !And [!Condition Upto3, !Not [!Equals [!Ref SyncedLayers, 3]]]
+  Upto5: !Equals [!Ref SyncedLayers, 5]
+  Sync1: !And [!Condition Upto1, !Not [!Equals [!Ref Layer1, ""]]]
+  Sync2: !And [!Condition Upto2, !Not [!Equals [!Ref Layer2, ""]]]
+  Sync3: !And [!Condition Upto3, !Not [!Equals [!Ref Layer3, ""]]]
+  Sync4: !And [!Condition Upto4, !Not [!Equals [!Ref Layer4, ""]]]
+  Sync5: !And [!Condition Upto5, !Not [!Equals [!Ref Layer5, ""]]]
+
+Resources:
+  RepositoryLink:
+    Type: AWS::CodeStarConnections::RepositoryLink
+    Properties:
+      ConnectionArn: !Ref ConnectionArn
+      OwnerId: !Ref GitHubOwner
+      RepositoryName: !Ref RepositoryName
+
+  # PowerUserAccess covers every service except IAM and Organizations. This
+  # customer managed policy (not inline) adds IAM, limited to resources named
+  # onward-<environment>-*, so the lab stacks can create their own roles only.
+  GitSyncIamPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub "onward-${Environment}-${Lab}-git-sync-iam"
+      Description: IAM for the lab stacks, limited to onward-<environment>-* resources.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: OnwardIamResources
+            Effect: Allow
+            Action: iam:*
+            Resource:
+              - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/onward-${Environment}-*"
+              - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:instance-profile/onward-${Environment}-*"
+              - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/onward-${Environment}-*"
+          - Sid: ReadIam
+            Effect: Allow
+            Action: [iam:Get*, iam:List*]
+            Resource: "*"
+
+  GitSyncRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "onward-${Environment}-${Lab}-git-sync"
+      Description: Assumed by CloudFormation Git sync to deploy this lab's stacks.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: cloudformation.sync.codeconnections.amazonaws.com }
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/PowerUserAccess"
+        - !Ref GitSyncIamPolicy
+
+  # FILE_CHANGE: a stack only redeploys when its own template or deployment file changes.
+  Sync1Config:
+    Type: AWS::CodeStarConnections::SyncConfiguration
+    Condition: Sync1
+    Properties:
+      ResourceName: !Sub "onward-${Environment}-${Lab}-${Layer1}"
+      SyncType: CFN_STACK_SYNC
+      RepositoryLinkId: !GetAtt RepositoryLink.RepositoryLinkId
+      Branch: !Ref Branch
+      ConfigFile: !Sub "infra/${Layer1}/deployment.yaml"
+      RoleArn: !GetAtt GitSyncRole.Arn
+      PublishDeploymentStatus: ENABLED
+      TriggerResourceUpdateOn: FILE_CHANGE
+
+  Sync2Config:
+    Type: AWS::CodeStarConnections::SyncConfiguration
+    Condition: Sync2
+    Properties:
+      ResourceName: !Sub "onward-${Environment}-${Lab}-${Layer2}"
+      SyncType: CFN_STACK_SYNC
+      RepositoryLinkId: !GetAtt RepositoryLink.RepositoryLinkId
+      Branch: !Ref Branch
+      ConfigFile: !Sub "infra/${Layer2}/deployment.yaml"
+      RoleArn: !GetAtt GitSyncRole.Arn
+      PublishDeploymentStatus: ENABLED
+      TriggerResourceUpdateOn: FILE_CHANGE
+
+  Sync3Config:
+    Type: AWS::CodeStarConnections::SyncConfiguration
+    Condition: Sync3
+    Properties:
+      ResourceName: !Sub "onward-${Environment}-${Lab}-${Layer3}"
+      SyncType: CFN_STACK_SYNC
+      RepositoryLinkId: !GetAtt RepositoryLink.RepositoryLinkId
+      Branch: !Ref Branch
+      ConfigFile: !Sub "infra/${Layer3}/deployment.yaml"
+      RoleArn: !GetAtt GitSyncRole.Arn
+      PublishDeploymentStatus: ENABLED
+      TriggerResourceUpdateOn: FILE_CHANGE
+
+  Sync4Config:
+    Type: AWS::CodeStarConnections::SyncConfiguration
+    Condition: Sync4
+    Properties:
+      ResourceName: !Sub "onward-${Environment}-${Lab}-${Layer4}"
+      SyncType: CFN_STACK_SYNC
+      RepositoryLinkId: !GetAtt RepositoryLink.RepositoryLinkId
+      Branch: !Ref Branch
+      ConfigFile: !Sub "infra/${Layer4}/deployment.yaml"
+      RoleArn: !GetAtt GitSyncRole.Arn
+      PublishDeploymentStatus: ENABLED
+      TriggerResourceUpdateOn: FILE_CHANGE
+
+  Sync5Config:
+    Type: AWS::CodeStarConnections::SyncConfiguration
+    Condition: Sync5
+    Properties:
+      ResourceName: !Sub "onward-${Environment}-${Lab}-${Layer5}"
+      SyncType: CFN_STACK_SYNC
+      RepositoryLinkId: !GetAtt RepositoryLink.RepositoryLinkId
+      Branch: !Ref Branch
+      ConfigFile: !Sub "infra/${Layer5}/deployment.yaml"
+      RoleArn: !GetAtt GitSyncRole.Arn
+      PublishDeploymentStatus: ENABLED
+      TriggerResourceUpdateOn: FILE_CHANGE
+
+Outputs:
+  GitSyncRoleArn:
+    Value: !GetAtt GitSyncRole.Arn
+  RepositoryLinkId:
+    Value: !GetAtt RepositoryLink.RepositoryLinkId

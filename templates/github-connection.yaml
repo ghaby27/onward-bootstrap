@@ -1,0 +1,27 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  The account's CodeConnections connection to GitHub, shared by every lab. AWS
+  needs a person to approve a new GitHub connection once in the console
+  (Developer Tools > Settings > Connections > Update pending connection) and the
+  AWS Connector for GitHub app installed on the repositories. Each lab links its
+  own repository in its Git sync stack (git-sync.yaml).
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, test, prod]
+    Default: dev
+
+Resources:
+  GitHubConnection:
+    Type: AWS::CodeConnections::Connection
+    Properties:
+      ConnectionName: !Sub "onward-${Environment}-github"
+      ProviderType: GitHub
+
+Outputs:
+  ConnectionArn:
+    Value: !Ref GitHubConnection
+  ConnectionStatus:
+    Description: Must be AVAILABLE before a lab can be synced.
+    Value: !GetAtt GitHubConnection.ConnectionStatus

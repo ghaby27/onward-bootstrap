@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Monthly cost budget for the Onward Logistics account (company standard: keep
+  budget alerts active). Emails the owner when actual spend passes 80% of the
+  limit and when forecast spend passes 100%. The address is read from SSM
+  Parameter Store (created by settings.yaml), so it never appears in Git.
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, test, prod]
+    Default: dev
+  MonthlyLimitUsd:
+    Type: Number
+    Default: 150
+    Description: Above the expected spend of the labs that are running, so an alert means unexpected spend.
+
+Resources:
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub "onward-${Environment}-monthly-budget"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyLimitUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - { SubscriptionType: EMAIL, Address: !Sub "{{resolve:ssm:/onward/${Environment}/budget-alert-email}}" }
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - { SubscriptionType: EMAIL, Address: !Sub "{{resolve:ssm:/onward/${Environment}/budget-alert-email}}" }

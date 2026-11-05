@@ -1,0 +1,23 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  The account's GitHub Actions OIDC identity provider. GitHub workflows exchange
+  a short-lived OIDC token for temporary AWS credentials, so no access keys are
+  stored in GitHub. There can be only one provider for this URL per account, and
+  other projects' roles already trust it, so deploy.sh imports the existing one
+  instead of creating it. Retain keeps it if this stack is ever deleted.
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+      ThumbprintList: [2b18947a6a9fc7764fd8b5fb18a863b0c6dac24f]
+
+Outputs:
+  ProviderArn:
+    Value: !Ref GitHubOidcProvider
+    Export:
+      Name: onward-github-oidc-provider-arn

@@ -1,0 +1,10 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Empty placeholder that reserves a lab's stack name. Git sync can only manage a
+  stack that already exists (CREATE_COMPLETE or similar), so each lab stack is
+  created once from this file and Git sync then replaces it with the lab's real
+  template from the repository. It creates no billable resources.
+
+Resources:
+  Placeholder:
+    Type: AWS::CloudFormation::WaitConditionHandle
