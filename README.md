@@ -22,9 +22,11 @@ A lab repository has:
 - `lab.env`, for example:
   ```bash
   LAB=delivery
-  LAYERS=(network security registry service pipeline)
+  LAYERS=(artifacts platform)
   ```
 - `infra/<layer>/template.yaml` and `infra/<layer>/deployment.yaml` for each layer (up to 5).
+  A layer's template may be a root stack that nests others; the lab then publishes the nested
+  templates to S3 itself (see the safe delivery lab's `publish-templates` workflow).
 - Optional hooks: `scripts/hooks/before-<layer>.sh` runs just before that layer is synced, and
   `scripts/hooks/before-teardown.sh` runs before the lab is deleted.
 
